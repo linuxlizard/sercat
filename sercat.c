@@ -262,10 +262,10 @@ int serial_open_port( struct args* args )
  *  Run chat.  See 'man 8 chat' for details on chat.
  */
 
-int run_chat(int fd)
+int run_chat(int fd, const char* chat_file)
 {
 	const char* chat = "/usr/sbin/chat";
-	
+
 	pid_t pid = fork();
 	if (pid == 0) {
 		// child;
@@ -273,8 +273,7 @@ int run_chat(int fd)
 		close(1);
 		dup2(fd,0);
 		dup2(fd,1);
-		execl(chat, chat, "-f", "chat-passwd", "-v", "-s", NULL);
-//		int err = execl(chat, chat, "-f", "chatf", "-v", "-s", NULL);
+		execl(chat, chat, "-f", chat_file, "-v", "-s", NULL);
 		// should not reach here
 		perror("execl");
 		return -errno;
@@ -308,11 +307,11 @@ void test_regex(regex_t* prompt)
 int main(int argc, char* argv[] )
 {
 	struct args args;
+	int final_err = EXIT_SUCCESS;
 
 	if (parse_args(argc, argv, &args) != 0) {
 		return EXIT_FAILURE;
 	}
-	return EXIT_SUCCESS;
 
 	init_signals();
 
@@ -323,8 +322,10 @@ int main(int argc, char* argv[] )
 		exit(EXIT_FAILURE);
 	}
 
-//	run_chat(fd);
-//	return EXIT_SUCCESS;
+	if (args.use_chat) {
+		final_err = (run_chat(fd, args.chat_file) == 0) ? EXIT_SUCCESS : EXIT_FAILURE;
+		goto leave;
+	}
 
 	// prompt visually looks like:
 	// [console@E3000-c93: /]$
@@ -353,7 +354,6 @@ int main(int argc, char* argv[] )
 	inetline_init(&line);
 	char c;
 
-	int final_err = EXIT_SUCCESS;
 	while( !main_quit ) {
 		ret = read(fd, &c, 1);
 
@@ -376,6 +376,7 @@ int main(int argc, char* argv[] )
 		}
 	}
 
+leave:
 	regfree(&prompt);
 	close(fd);
 	return final_err;

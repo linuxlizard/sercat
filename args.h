@@ -1,4 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0-only
+/*
+ * argument parsing
+ * davep 20201115
+ *
+ * (C) 2020 David Poole <davep@.mbuf.com>
+ */
 #ifndef ARGS_H
 #define ARGS_H
 
@@ -18,7 +24,12 @@
 #define SERIAL_1_STOP_BITS  1 
 #define SERIAL_2_STOP_BITS  2 
 
-/* flow control */
+/* flow control 
+ * hardware flor == RTSCTS 
+ * software flow == XON/XOFF
+ *
+ * no support for DTR/DTS flow control
+ */
 #define FLOW_CONTROL_NONE     1
 #define FLOW_CONTROL_HARDWARE 2
 #define FLOW_CONTROL_SOFTWARE 3
@@ -38,20 +49,19 @@ struct args
 	int flow_control;
 	char serial_port[FILENAME_MAX+1];
 
+	// debug/verbosity
+	int debug;
+
+	// dump all output in hex
+	bool hex;
+
 	// chat 
 	bool use_chat;
-	char chat_script[FILENAME_MAX+1];
+	char chat_file[FILENAME_MAX+1];
 };
 
-static const struct args default_args = {
-	.baudrate = DEFAULT_BAUD_RATE,
-	.parity = SERIAL_NO_PARITY,
-	.databits = SERIAL_8_DATA_BITS,
-	.stopbits = SERIAL_1_STOP_BITS,
-	.flow_control = FLOW_CONTROL_HARDWARE,
-};
 
-int parse_args(int argc, char* argv[], struct args* args);
+int parse_args(int argc, char** argv, struct args* args);
 
 #endif
 
