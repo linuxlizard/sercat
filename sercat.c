@@ -23,6 +23,7 @@
 #include <ctype.h>
 #include <regex.h>
 #include <sys/wait.h>
+#include <poll.h>
 
 #include "args.h"
 #include "xassert.h"
@@ -338,40 +339,102 @@ int main(int argc, char* argv[] )
 		return EXIT_FAILURE;
 	}
 
-//	return EXIT_SUCCESS;
+	// order matters here; when stdin shuts down, I simply drop ndfs 
+	// from 2 to 1 so serial must be the 0'th element in the list
+#define SERIAL_IDX 0
+#define STDIN_IDX 1
+	struct pollfd pfds[2];
+	memset(pfds, 0, sizeof(pfds));
 
-	ssize_t ret;
-	for (int i=1 ; i<argc ; i++ ) {
-		ret = write(fd, argv[i], strlen(argv[i]));
-		ret = write(fd, " ", 1);
-#ifdef DEBUG
-		printf("send ret=%zd\n", ret);
-#endif
-	}
-	write(fd, "\n", 1);
+	pfds[SERIAL_IDX].fd = fd;
+	pfds[SERIAL_IDX].events = POLLIN|POLLNVAL;
+
+	pfds[STDIN_IDX].fd = fileno(stdin);
+	pfds[STDIN_IDX].events = POLLIN|POLLNVAL;
 
 	struct inetline line;
 	inetline_init(&line);
 	char c;
+	ssize_t ret;
+	nfds_t nfds = 2;
 
 	while( !main_quit ) {
-		ret = read(fd, &c, 1);
-
-		ret = inetline_char(&line, c);
-		if (ret > 0) {
-			// we have a full line
-			printf("%s\n", line.str);
-		}
-		else if (ret < 0) {
-			final_err = EXIT_FAILURE;
-			fprintf(stderr, "inetline_char() failed err=%d\n", err);
+		int num_fds = poll(pfds, nfds, -1);
+		if (num_fds < 0) {
+			perror("poll");
 			break;
 		}
-		else {
-			// did we hit a prompt? if so, we can leave
-			err = regexec(&prompt, line.str, 0, NULL, 0);
-			if (err==0) {
+
+		if (pfds[STDIN_IDX].revents != 0) {
+			// read stdin, write to serial port
+
+			if (pfds[STDIN_IDX].revents & (POLLERR|POLLNVAL)) {
+				fprintf(stderr, "error in stdin events=%#x\n", pfds[STDIN_IDX].revents);
 				break;
+			}
+
+			if (pfds[STDIN_IDX].revents & POLLIN) {
+				ret = read(pfds[STDIN_IDX].fd, &c, 1);
+				fprintf(stderr, "stdin read=%zd\n", ret);
+
+				ret = write(fd, &c, 1);
+				fprintf(stderr, "serial write=%zd\n", ret);
+			}
+
+			if (pfds[STDIN_IDX].revents & POLLHUP) {
+				fprintf(stderr, "HUP on fd=%d; closed\n", pfds[STDIN_IDX].fd);
+
+				// read until input exhausted
+				while(1) {
+					ret = read(pfds[STDIN_IDX].fd, &c, 1);
+					fprintf(stderr, "stdin read=%zd\n", ret);
+					if (ret==0) {
+						break;
+					}
+
+					ret = write(fd, &c, 1);
+					fprintf(stderr, "serial write=%zd\n", ret);
+				}
+
+				// disable stdin poll event
+				pfds[STDIN_IDX].events = 0;
+				pfds[STDIN_IDX].revents = 0;
+				nfds = 1;
+			}
+		}
+
+		if (pfds[SERIAL_IDX].revents != 0) {
+			// read serial port
+
+			if (pfds[SERIAL_IDX].revents & (POLLERR|POLLHUP)) {
+				fprintf(stderr, "error in serial\n");
+				break;
+			}
+
+			if (pfds[SERIAL_IDX].revents & POLLIN) {
+				ret = read(fd, &c, 1);
+
+				if (args.debug > 2) {
+					printf("serial read=%zd\n", ret);
+				}
+
+				ret = inetline_char(&line, c);
+				if (ret > 0) {
+					// we have a full line
+					printf("%s\n", line.str);
+				}
+				else if (ret < 0) {
+					final_err = EXIT_FAILURE;
+					fprintf(stderr, "inetline_char() failed err=%d\n", err);
+					break;
+				}
+				else {
+					// did we hit a prompt? if so, we can leave
+					err = regexec(&prompt, line.str, 0, NULL, 0);
+					if (err==0) {
+						break;
+					}
+				}
 			}
 		}
 	}
