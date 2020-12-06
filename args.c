@@ -39,18 +39,18 @@ struct baud_rate baudrate_list[] = {
 };
 
 static const struct args default_args = {
-       .baudrate = DEFAULT_BAUD_RATE,
-       .parity = SERIAL_NO_PARITY,
-       .databits = SERIAL_8_DATA_BITS,
-       .stopbits = SERIAL_1_STOP_BITS,
-       .flow_control = FLOW_CONTROL_HARDWARE,
+	.baudrate = DEFAULT_BAUD_RATE,
+	.parity = SERIAL_NO_PARITY,
+	.databits = SERIAL_8_DATA_BITS,
+	.stopbits = SERIAL_1_STOP_BITS,
+	.flow_control = FLOW_CONTROL_HARDWARE,
 };
 
 static void usage(void)
 {
 	// mimic minicom's options where possible
 	const char* msg = "\
-	-b --bauderate		: serial port baudrate (default 115200)\n\
+	-b --baudrate		: serial port baudrate (default 115200)\n\
 	-d --debug		: increase debug/verbosity (multiple args for more verbosity)\n\
 	-f --flow		: set flow control (hard,soft,none) (default hard)\n\
 	-h --help		: display this help\n\
